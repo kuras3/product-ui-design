@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""
+scan-tells.py — mechanical gate for the product-ui-design skill.
+
+Greps generated CSS/HTML for the machine-detectable AI tells. A passing scan is
+NECESSARY, NOT SUFFICIENT: it catches the obvious signals, not taste. The
+judgment tells (mono labels, four-equal stat strips, glowing dots as design,
+generic hierarchy) still need a human/agent read of references/ai-tells.md.
+
+Usage:
+    python scan-tells.py <file-or-dir> [more paths...]
+
+Exit codes:
+    0 = clean (no tells)
+    1 = at least one tell found
+    2 = usage error or no scannable files
+
+CSS-in-JS (.js/.ts) coverage is best-effort. No third-party dependencies.
+"""
+
+import os
+import re
+import sys
+
+# Make output robust on legacy consoles (e.g. Windows cp932): scanned snippets
+# and messages may contain non-ASCII (—, …, ⌘). Fall back silently if unsupported.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
+EXTS = (
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".less",
+    ".jsx",
+    ".tsx",
+    ".vue",
+    ".svelte",
+    ".astro",
+    ".js",
+    ".ts",
+    ".mjs",
+    ".cjs",  # CSS-in-JS, best-effort
+)
+
+# --- Per-line rules: single-token patterns that live on one line. ---
+# (id, compiled regex, human message)
+LINE_RULES = [
+    (
+        "indigo-accent",
+        re.compile(
+            r"#(6366f1|818cf8|5b5bd6|6d28d9|7c3aed|4f46e5|a78bfa|8b5cf6)\b", re.I
+        ),
+        "purple/indigo AI accent — pick a brand accent from the product's world",
+    ),
+    (
+        "indigo-tailwind",
+        re.compile(
+            r"\b(?:bg|text|from|via|to|border|ring|fill|stroke)-(?:indigo|violet|purple|fuchsia)-\d{2,3}\b",
+            re.I,
+        ),
+        "purple/indigo Tailwind utility — the default AI accent; use a brand color",
+    ),
+    (
+        "pure-black-text-bg",
+        # Left boundary so border-color/caret-color/outline-color do NOT match.
+        re.compile(
+            r"(?<![-\w])(?:color|background(?:-color)?)\s*:\s*(?:#000(?:000)?|black)\b",
+            re.I,
+        ),
+        "pure black for text/bg — use near-black (#1a1a1a..#08090A)",
+    ),
+    (
+        "transition-all",
+        re.compile(r"transition\s*:\s*all\b", re.I),
+        "transition: all — animate only transform/opacity",
+    ),
+    (
+        "scale-zero",
+        re.compile(r"\bscale\(\s*0\s*\)", re.I),
+        "animating from scale(0) — start at scale(0.95) + opacity",
+    ),
+    (
+        "disable-zoom",
+        # =1 or =1.0 disables zoom; =1.5/=10/=1.25 permit it (must not match).
+        re.compile(
+            r"user-scalable\s*=\s*no|maximum-scale\s*=\s*1(?:\.0+)?(?![.\d])", re.I
+        ),
+        "zoom disabled (WCAG 1.4.4 fail) — use 16px inputs to stop iOS auto-zoom instead",
+    ),
+]
+
+# --- Whole-text rules: patterns whose tokens routinely wrap across lines. ---
+# box-shadow values and :focus{} blocks are commonly multi-line in hand-written CSS.
+BLACK_SHADOW = re.compile(
+    r"box-shadow\s*:[^;{}]*(?:rgba?\(\s*0\s*,\s*0\s*,\s*0|#000(?:000)?\b)", re.I
+)
+FOCUS_BLOCK = re.compile(r":focus\b(?!-visible)[^{}]*\{[^{}]*\}", re.I | re.S)
+OUTLINE_NONE = re.compile(r"outline\s*:\s*(?:none|0)\b", re.I)
+
+# Comments are stripped before matching so a tell mentioned in a comment
+# (e.g. "/* scale(0) not allowed */") is not a false positive.
+COMMENT = re.compile(r"/\*.*?\*/|<!--.*?-->", re.S)
+
+# Heuristic (review, not a hard fail): small font-size that MIGHT be on an input.
+SMALL_FONT = re.compile(r"font-size\s*:\s*(\d{1,2})(?:\.\d+)?px", re.I)
+
+
+def strip_comments(text: str) -> str:
+    """Blank out /* */ and <!-- --> comment bodies, preserving newlines."""
+    return COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+
+
+def line_of(text: str, pos: int) -> int:
+    return text.count("\n", 0, pos) + 1
+
+
+def snippet_at(text: str, pos: int) -> str:
+    start = text.rfind("\n", 0, pos) + 1
+    end = text.find("\n", pos)
+    if end == -1:
+        end = len(text)
+    return text[start:end].strip()[:120]
+
+
+def iter_files(paths):
+    for p in paths:
+        if os.path.isfile(p):
+            # Only scan CSS/HTML-family files, even when passed directly, so
+            # documentation/prose (e.g. .md that mentions tells as examples) is
+            # not false-flagged.
+            if p.lower().endswith(EXTS):
+                yield p
+            else:
+                print(f"skipped: {p} (not a scannable type)", file=sys.stderr)
+        elif os.path.isdir(p):
+            for root, _dirs, files in os.walk(p):
+                for f in files:
+                    if f.lower().endswith(EXTS):
+                        yield os.path.join(root, f)
+        else:
+            print(f"skipped: {p} (not found)", file=sys.stderr)
+
+
+def scan(paths):
+    hits = []  # hard tells
+    reviews = []  # heuristic, needs eyeballing
+    files = list(iter_files(paths))
+    for fp in files:
+        try:
+            with open(fp, "r", encoding="utf-8", errors="replace") as fh:
+                raw = fh.read()
+        except OSError:
+            continue
+        text = strip_comments(raw)  # newline-preserving
+
+        # Per-line single-token rules + small-font review.
+        for i, line in enumerate(text.splitlines(), 1):
+            snippet = line.strip()[:120]
+            for rid, rx, msg in LINE_RULES:
+                if rx.search(line):
+                    hits.append((fp, i, rid, msg, snippet))
+            m = SMALL_FONT.search(line)
+            if m and int(m.group(1)) < 16 and "input" in line.lower():
+                reviews.append(
+                    (
+                        fp,
+                        i,
+                        "small-input-font",
+                        "font-size < 16px near 'input' — confirm it's not an input (iOS auto-zoom)",
+                        snippet,
+                    )
+                )
+
+        # Whole-text rules (tokens may wrap across lines).
+        for m in BLACK_SHADOW.finditer(text):
+            hits.append(
+                (
+                    fp,
+                    line_of(text, m.start()),
+                    "black-shadow",
+                    "pure-black box-shadow — tint toward the background hue, 2 layers",
+                    snippet_at(text, m.start()),
+                )
+            )
+        for m in FOCUS_BLOCK.finditer(text):
+            block = m.group(0)
+            low = block.lower()
+            if (
+                OUTLINE_NONE.search(block)
+                and "box-shadow" not in low
+                and "focus-visible" not in low
+            ):
+                hits.append(
+                    (
+                        fp,
+                        line_of(text, m.start()),
+                        "focus-outline-none",
+                        "outline:none on :focus with no ring — add :focus-visible/box-shadow ring",
+                        snippet_at(text, m.start()),
+                    )
+                )
+    return files, hits, reviews
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if not args:
+        print("usage: python scan-tells.py <file-or-dir> [more paths...]")
+        return 2
+    files, hits, reviews = scan(args)
+    if not files:
+        print("no scannable files found (looked for: " + " ".join(EXTS) + ")")
+        return 2
+
+    hits.sort(key=lambda h: (h[0], h[1]))
+    for fp, ln, rid, msg, snippet in hits:
+        print(f"TELL   {fp}:{ln}  [{rid}] {msg}\n        {snippet}")
+    for fp, ln, rid, msg, snippet in reviews:
+        print(f"REVIEW {fp}:{ln}  [{rid}] {msg}\n        {snippet}")
+
+    print(
+        f"\nscanned {len(files)} file(s): {len(hits)} tell(s), {len(reviews)} review item(s)"
+    )
+    if hits:
+        print(
+            "FAIL — fix the tells above, then re-scan. (Reminder: a clean scan is "
+            "necessary, not sufficient — also read references/ai-tells.md for the judgment tells.)"
+        )
+        return 1
+    print(
+        "PASS — no machine-detectable tells. Still do the manual read of references/ai-tells.md."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
