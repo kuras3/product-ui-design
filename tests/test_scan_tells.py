@@ -66,6 +66,41 @@ DETECT = [
     ),
     ("shadow-hash000", "a.css", ".x{box-shadow:0 1px 2px #000}", "black-shadow"),
     ("color-rgb-black", "a.css", ".x{color:rgb(0,0,0)}", "pure-black-text-bg"),
+    # Pure black defined as a token — the shape the skill's no-raw-hex rule forces.
+    ("token-foreground-000", "a.css", ":root{--foreground:#000}", "token-pure-black"),
+    ("token-bg-keyword", "a.css", ":root{--background:black}", "token-pure-black"),
+    (
+        "token-fg-space-rgb",
+        "a.css",
+        ":root{--text:rgb(0 0 0)}",
+        "token-pure-black",
+    ),
+    # Arbitrary-value Tailwind black (escape hatch the keyword rule misses).
+    (
+        "tw-arbitrary-black",
+        "a.html",
+        '<div class="bg-[#000]">x</div>',
+        "arbitrary-black-tw",
+    ),
+    (
+        "tw-arbitrary-black6",
+        "a.html",
+        '<div class="text-[#000000]">x</div>',
+        "arbitrary-black-tw",
+    ),
+    # Indigo on the newly-covered utility prefixes.
+    (
+        "tw-indigo-accent",
+        "a.html",
+        '<input class="accent-indigo-600" type="checkbox">',
+        "indigo-tailwind",
+    ),
+    (
+        "tw-indigo-outline",
+        "a.html",
+        '<button class="outline-violet-500">x</button>',
+        "indigo-tailwind",
+    ),
     # Existing CSS-property rules must keep working.
     ("css-transition-all", "a.css", ".x{transition:all .2s}", "transition-all"),
     ("css-color-000", "a.css", ".x{color:#000}", "pure-black-text-bg"),
@@ -128,6 +163,17 @@ CLEAN = [
     ),
     ("near-black-color", "a.css", ".x{color:#1a1a1a}", "pure-black-text-bg"),
     ("border-color-black", "a.css", ".x{border-color:#000}", "pure-black-text-bg"),
+    # A near-black text token is correct — must not trip the new token rule.
+    ("token-near-black", "a.css", ":root{--foreground:#1a1a1a}", "token-pure-black"),
+    # A pure-black *border* token is a different (weaker) tell, out of this rule's scope.
+    ("token-border-black", "a.css", ":root{--border:#000}", "token-pure-black"),
+    # Arbitrary near-black is fine; only literal #000/#000000 should fire.
+    (
+        "tw-arbitrary-near-black",
+        "a.html",
+        '<div class="bg-[#0a0a0a]">x</div>',
+        "arbitrary-black-tw",
+    ),
 ]
 
 
@@ -152,3 +198,33 @@ def test_clean_file_has_no_tells(tmp_path):
     text = ".x{color:#1a1a1a;background:#fff;box-shadow:0 1px 2px rgba(16,40,32,.05)}"
     tells, _reviews = fired(tmp_path, "a.css", text)
     assert tells == set()
+
+
+# Prettier splits a long className across lines via cn(), so outline-none and its
+# focus-visible ring land on different lines. The ring is still in the same class
+# context, so the gate must stay silent — a line-scoped check would false-flag it.
+def test_outline_none_multiline_cn_with_ring_is_clean(tmp_path):
+    text = (
+        "<button\n"
+        "  className={cn(\n"
+        '    "rounded-md border focus:outline-none",\n'
+        '    "focus-visible:ring-2 focus-visible:ring-offset-2",\n'
+        "  )}\n"
+        ">x</button>\n"
+    )
+    tells, _reviews = fired(tmp_path, "a.tsx", text)
+    assert "tw-outline-none" not in tells
+
+
+# Same multi-line shape but with NO ring anywhere in the context — must fire.
+def test_outline_none_multiline_cn_without_ring_fires(tmp_path):
+    text = (
+        "<button\n"
+        "  className={cn(\n"
+        '    "rounded-md border focus:outline-none",\n'
+        '    "px-3 py-2",\n'
+        "  )}\n"
+        ">x</button>\n"
+    )
+    tells, _reviews = fired(tmp_path, "a.tsx", text)
+    assert "tw-outline-none" in tells

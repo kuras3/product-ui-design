@@ -22,6 +22,7 @@ import os
 import re
 import sys
 from collections.abc import Iterator
+from typing import Optional
 
 # Make output robust on legacy consoles (e.g. Windows cp932): scanned snippets
 # and messages may contain non-ASCII (—, …, ⌘). Fall back silently if unsupported.
@@ -60,7 +61,8 @@ LINE_RULES = [
     (
         "indigo-tailwind",
         re.compile(
-            r"\b(?:bg|text|from|via|to|border|ring|fill|stroke)-(?:indigo|violet|purple|fuchsia)-\d{2,3}\b",
+            r"\b(?:bg|text|from|via|to|border|ring|fill|stroke|outline|divide|"
+            r"decoration|accent|caret|shadow)-(?:indigo|violet|purple|fuchsia)-\d{2,3}\b",
             re.I,
         ),
         "purple/indigo Tailwind utility — the default AI accent; use a brand color",
@@ -76,6 +78,19 @@ LINE_RULES = [
             re.I,
         ),
         "pure black for text/bg — use near-black (#1a1a1a..#08090A)",
+    ),
+    (
+        "token-pure-black",
+        # The skill mandates tokens over inline hex, so generated pure-black lands
+        # as `--foreground:#000`, which the property-scoped rule above never sees.
+        # Scope to text/bg/surface-ish token names; a pure-black `--border` is a
+        # different (weaker) tell and stays out, matching the shadow rule's logic.
+        re.compile(
+            r"--[\w-]*(?:foreground|background|surface|text|body|ink|fg|bg|heading|title|content)[\w-]*"
+            r"\s*:\s*(?:#000(?:000)?\b|black\b|rgba?\(\s*0[\s,]+0[\s,]+0\b)",
+            re.I,
+        ),
+        "pure-black color token — define text/bg tokens as near-black (#1a1a1a..#08090A)",
     ),
     (
         "transition-all",
@@ -116,14 +131,66 @@ LINE_RULES = [
         re.compile(r"\b(?:bg|text)-black\b(?!/)", re.I),
         "Tailwind bg-black/text-black — use near-black (e.g. zinc-950, neutral-900)",
     ),
+    (
+        "arbitrary-black-tw",
+        # Arbitrary-value escape hatch: bg-[#000] / text-[#000000]. The keyword
+        # rule above only sees bg-black/text-black; indigo's hex literal is caught
+        # by indigo-accent, so black is the asymmetric gap closed here.
+        re.compile(r"\b(?:bg|text)-\[#000(?:000)?\]", re.I),
+        "Tailwind arbitrary pure-black (bg-[#000]/text-[#000]) — use near-black",
+    ),
 ]
 
 # Tailwind outline-none without a focus-visible ring replacement — the utility
 # analogue of the CSS :focus{outline:none} check. Flag only when no ring /
-# focus-visible / shadow utility sits on the same line (those signal a real
-# focus replacement).
+# focus-visible / shadow utility sits in the SAME class context (those signal a
+# real focus replacement). The context, not the line, because Prettier splits a
+# long className across lines via cn()/clsx(), separating outline-none from its
+# ring — a line-scoped check false-flags that idiomatic clean code.
 TW_OUTLINE_NONE = re.compile(r"\boutline-none\b", re.I)
 TW_RING_OK = re.compile(r"\b(?:ring|focus-visible:|shadow-)", re.I)
+# Start of a class attribute / helper call: class="...", className={cn(...)}, etc.
+CLASS_ATTR = re.compile(r"class(?:Name)?\s*=\s*")
+
+
+def class_context(text: str, pos: int) -> Optional[str]:
+    """Return the class string/expression enclosing *pos*, or None.
+
+    Bounds the nearest `class(Name)=` value: a quoted string ends at its quote;
+    a `{…}` expression (cn/clsx/template literal) ends at the balanced brace, so
+    a multi-line cn() call is treated as one context. None when *pos* is not
+    inside such a value (caller falls back to the single line).
+    """
+    last = None
+    for m in CLASS_ATTR.finditer(text, 0, pos + 1):
+        last = m
+    if last is None:
+        return None
+    i = last.end()
+    if i >= len(text):
+        return None
+    ch = text[i]
+    if ch in "\"'`":
+        end = text.find(ch, i + 1)
+        if end == -1 or pos > end:
+            return None
+        return text[i + 1 : end]
+    if ch == "{":
+        depth = 0
+        j = i
+        while j < len(text):
+            if text[j] == "{":
+                depth += 1
+            elif text[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        if pos > j:
+            return None
+        return text[i + 1 : j]
+    return None
+
 
 # Directories never worth scanning (third-party code, build output, VCS).
 EXCLUDED_DIRS = {
@@ -220,16 +287,6 @@ def scan(paths: list[str]) -> tuple[list[str], list[tuple], list[tuple]]:
             for rid, rx, msg in LINE_RULES:
                 if rx.search(line):
                     hits.append((fp, i, rid, msg, snippet))
-            if TW_OUTLINE_NONE.search(line) and not TW_RING_OK.search(line):
-                hits.append(
-                    (
-                        fp,
-                        i,
-                        "tw-outline-none",
-                        "Tailwind outline-none without a focus-visible ring — pair with focus-visible:ring-*",
-                        snippet,
-                    )
-                )
             m = SMALL_FONT.search(line)
             if m and int(m.group(1)) < 16 and "input" in line.lower():
                 reviews.append(
@@ -242,7 +299,21 @@ def scan(paths: list[str]) -> tuple[list[str], list[tuple], list[tuple]]:
                     )
                 )
 
-        # Whole-text rules (tokens may wrap across lines).
+        # Whole-text rules (tokens / class lists may wrap across lines).
+        for m in TW_OUTLINE_NONE.finditer(text):
+            region = class_context(text, m.start())
+            if region is None:
+                region = snippet_at(text, m.start())  # not in a class attr → line
+            if not TW_RING_OK.search(region):
+                hits.append(
+                    (
+                        fp,
+                        line_of(text, m.start()),
+                        "tw-outline-none",
+                        "Tailwind outline-none without a focus-visible ring — pair with focus-visible:ring-*",
+                        snippet_at(text, m.start()),
+                    )
+                )
         for m in BLACK_SHADOW.finditer(text):
             hits.append(
                 (
