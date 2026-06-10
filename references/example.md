@@ -33,6 +33,7 @@ the output will be generic — go back and pick a reference.
   --border:#e3e8e6;               /* ~6% darker than bg */
   --primary:#0e7c66;              /* the brand teal — a deliberate choice, not AI indigo */
   --ok:#15803d; --warn:#b45309; --danger:#b42318;   /* functional, counted separately */
+  --ok-bg:#e7f4ec; --track:#eef2f0;     /* surface tints — tokenized, not inlined (no-raw-hex rule) */
   --shadow-1:0 1px 2px rgba(16,40,32,.05), 0 1px 1px rgba(16,40,32,.04);
 }
 ```
@@ -74,18 +75,18 @@ the output will be generic — go back and pick a reference.
 .num{text-align:right}                                     /* numbers right-aligned */
 .big{font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--foreground)}
 .of{font-size:18px;color:var(--muted-foreground);font-weight:500}
-.meter{height:8px;border-radius:9999px;background:#eef2f0;overflow:hidden;margin-top:10px}
+.meter{height:8px;border-radius:9999px;background:var(--track);overflow:hidden;margin-top:12px}
 .meter span{display:block;height:100%;background:var(--primary);border-radius:9999px}
-.invoices{width:100%;border-collapse:collapse;margin-top:18px}
+.invoices{width:100%;border-collapse:collapse;margin-top:16px}
 .invoices th{font-size:12px;font-weight:600;color:var(--muted-foreground);text-align:left;
              padding:8px 0;border-bottom:1px solid var(--border)}        /* header: hairline, not a gray bar */
-.invoices td{padding:13px 0;border-bottom:1px solid var(--border);font-size:14px}  /* ~44px comfortable row */
-.pill{display:inline-flex;height:22px;align-items:center;padding:0 9px;border-radius:9999px;
-      font-size:12px;font-weight:600;background:#e7f4ec;color:var(--ok)}   /* status = pill, never a glowing dot */
+.invoices td{padding:12px 0;border-bottom:1px solid var(--border);font-size:14px}  /* 12px (on-grid) + ~20px line ≈ 44px comfortable row */
+.pill{display:inline-flex;height:22px;align-items:center;padding:0 8px;border-radius:9999px;
+      font-size:12px;font-weight:600;background:var(--ok-bg);color:var(--ok)}   /* status = pill, never a glowing dot */
 .btn-primary{height:38px;padding:0 16px;border-radius:8px;font-size:14px;font-weight:600;
-             background:var(--primary);color:#fff;transition:background .14s cubic-bezier(.23,1,.32,1)}
+             background:var(--primary);color:#fff;transition:background-color .14s cubic-bezier(.23,1,.32,1)}
 .btn-primary:active{transform:scale(.97)}
-.link{margin-left:14px;font-size:14px;color:var(--muted-foreground)}
+.link{margin-left:16px;font-size:14px;color:var(--muted-foreground)}
 ```
 
 ## 4. Verify

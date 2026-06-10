@@ -123,7 +123,7 @@ The headline product surface — get the defaults right:
 --ease-drawer:cubic-bezier(0.32, 0.72, 0, 1);
 ```
 - UI reactions ≤ 300ms; large surfaces (modal/drawer/page) 200–500ms.
-- Animate **only** `transform` and `opacity`. Never `transition: all`.
+- Animate `transform` and `opacity` for **movement** (they composite, no repaint). Cheap **paint-only** props — `color`, `background-color`, `border-color`, `box-shadow` — are fine for **state** changes (hover, focus). Never animate **layout** props (`width`, `height`, `top`/`left`, `margin`, `padding`) and never `transition: all`.
 - Enter from `scale(0.95)` + opacity, never `scale(0)`. Popovers origin-aware (`transform-origin` from trigger); modals center.
 - `:active { transform: scale(0.97); }`. Exit faster than enter.
 - **Frequency-gate**: high-frequency actions (command palette, shortcuts) get no open/close animation.

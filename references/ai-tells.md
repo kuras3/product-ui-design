@@ -56,7 +56,7 @@ Read this and scan your own output before finishing any product UI. These fire a
 | Film grain, sepia, `mix-blend-difference`, decorative glassmorphism | Marketing/ceiling techniques in the floor | Remove from product UI |
 | Custom cursor, parallax, 3D `preserve-3d`, scroll-hijack | Not in shipped product UI | Remove |
 | Hover `scale`/`rotate`/`translate` (big) | Toy-like | Hover = opacity or shadow change |
-| `transition: all` / animating layout props | Jank, lazy | Animate `transform`/`opacity` only |
+| `transition: all` / animating layout props | Jank, lazy | `transform`/`opacity` for motion; cheap paint props (`color`/`bg`/`box-shadow`) OK for state; never layout props or `all` |
 | Animating from `scale(0)` | Collapses in | `scale(0.95)` + opacity |
 | Blanket `prefers-reduced-motion` kill (duration 0 on everything) | Too blunt | Stop movement/position; keep opacity/color fades |
 | Animating high-frequency actions (command palette, shortcuts) | Annoying at repetition | No animation — frequency-gate |
