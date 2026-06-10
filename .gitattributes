@@ -1,0 +1,6 @@
+# Linguist overrides: this is a docs-first Claude skill, not a Python project.
+# The .py scanner is one optional tool; excluding it keeps the language stats
+# from misrepresenting the repo as "Python 100%".
+
+scripts/*  linguist-vendored=true
+*.md       linguist-detectable=true
