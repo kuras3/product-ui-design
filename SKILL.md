@@ -51,7 +51,7 @@ Before you present any UI, **scan your own output** for the known tells. These f
 - **No film grain, glow, radial-gradient atmosphere, custom cursor, parallax** in the product floor.
 - **No pure black** (`#000`) for background or text — use near-black (`#1a1a1a`–`#08090A` range). **No single-layer pure-black box-shadow** — use multi-layer shadows tinted toward the background hue.
 
-The checklist is in `references/ai-tells.md`. Read it before finishing any UI. An optional mechanical gate (`scripts/scan-tells.py`) greps generated CSS **and Tailwind classes** for the machine-detectable tells (indigo accent, pure-black text/bg/shadow incl. token shadows and modern `rgb(0 0 0)` syntax, `transition: all`, `scale(0)`, zoom-disable, focus-without-ring, sub-16px inputs).
+The checklist is in `references/ai-tells.md`. Read it before finishing any UI. An optional mechanical gate (`scripts/scan-tells.py`) greps generated CSS **and Tailwind classes** for the machine-detectable tells (indigo accent, pure-black text/bg/shadow — including token colors/shadows, arbitrary-value `bg-[#000]`, and modern `rgb(0 0 0)` syntax, `transition: all`, `scale(0)`, zoom-disable, focus-without-ring, sub-16px inputs).
 
 ## Positive defaults (replace every tell with a primitive)
 
@@ -75,7 +75,7 @@ For general **motion craft** (easing, `scale(0.95)` not `scale(0)`, `:active` sc
 
 ## Self-check before presenting
 
-Run all four, honestly:
+Run these honestly — the first four always, the fifth when you want a mechanical backstop:
 
 1. **Tell scan** — read `references/ai-tells.md` and grep your own output for every tell. Fix each.
 2. **Swap test** — if you swapped the type and accent for the generic defaults, would anything change? If not, you defaulted.
@@ -90,4 +90,4 @@ Honesty about scope: a clean scan + these tests guarantee a **tell-free, correct
 - `references/ai-tells.md` — the output-time hard-check list (read before finishing any UI).
 - `references/primitives.md` — concrete default values: tokens, type scale, shadow recipes, button norms, status/table/settings patterns, destructive actions, reference DNA profiles.
 - `references/example.md` — one fully worked build (anchor → diverge → annotated code) showing the generative path end to end.
-- `scripts/scan-tells.py` — optional mechanical gate (no dependencies; scans CSS/HTML/JSX and Tailwind classes for indigo, pure-black text/bg/shadow, `transition:all`, `scale(0)`, zoom-disable, focus-without-ring, sub-16px inputs).
+- `scripts/scan-tells.py` — optional mechanical gate (no dependencies; scans CSS/HTML/JSX and Tailwind classes for indigo, pure-black text/bg/shadow incl. token colors and arbitrary `bg-[#000]`, `transition:all`, `scale(0)`, zoom-disable, focus-without-ring, sub-16px inputs).
