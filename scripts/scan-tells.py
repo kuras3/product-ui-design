@@ -21,6 +21,7 @@ CSS-in-JS (.js/.ts) coverage is best-effort. No third-party dependencies.
 import os
 import re
 import sys
+from collections.abc import Iterator
 
 # Make output robust on legacy consoles (e.g. Windows cp932): scanned snippets
 # and messages may contain non-ASCII (—, …, ⌘). Fall back silently if unsupported.
@@ -67,8 +68,11 @@ LINE_RULES = [
     (
         "pure-black-text-bg",
         # Left boundary so border-color/caret-color/outline-color do NOT match.
+        # Covers #000, the `black` keyword, and rgb()/rgba() in both comma and
+        # space (modern) syntax.
         re.compile(
-            r"(?<![-\w])(?:color|background(?:-color)?)\s*:\s*(?:#000(?:000)?|black)\b",
+            r"(?<![-\w])(?:color|background(?:-color)?)\s*:\s*"
+            r"(?:#000(?:000)?\b|black\b|rgba?\(\s*0[\s,]+0[\s,]+0\b)",
             re.I,
         ),
         "pure black for text/bg — use near-black (#1a1a1a..#08090A)",
@@ -91,14 +95,66 @@ LINE_RULES = [
         ),
         "zoom disabled (WCAG 1.4.4 fail) — use 16px inputs to stop iOS auto-zoom instead",
     ),
+    # --- Tailwind utility-class equivalents of the CSS tells above. Generated
+    # product UI is overwhelmingly Tailwind, so the CSS-property rules alone miss
+    # the most common shape of the same mistakes. ---
+    (
+        "transition-all-tw",
+        re.compile(r"\btransition-all\b", re.I),
+        "Tailwind transition-all — animate transform/opacity or a specific paint "
+        "prop (transition-transform/-opacity/-colors), never all",
+    ),
+    (
+        "scale-zero-tw",
+        # scale-0 / scale-x-0 / scale-y-0 (enter from zero); scale-50 (=.5) must NOT match.
+        re.compile(r"\bscale-(?:[xy]-)?0\b", re.I),
+        "Tailwind scale-0 enter — start from scale-95 + opacity, not zero scale",
+    ),
+    (
+        "pure-black-tw",
+        # bg-black / text-black; bg-black/50 (alpha overlay, e.g. a backdrop) is allowed.
+        re.compile(r"\b(?:bg|text)-black\b(?!/)", re.I),
+        "Tailwind bg-black/text-black — use near-black (e.g. zinc-950, neutral-900)",
+    ),
 ]
+
+# Tailwind outline-none without a focus-visible ring replacement — the utility
+# analogue of the CSS :focus{outline:none} check. Flag only when no ring /
+# focus-visible / shadow utility sits on the same line (those signal a real
+# focus replacement).
+TW_OUTLINE_NONE = re.compile(r"\boutline-none\b", re.I)
+TW_RING_OK = re.compile(r"\b(?:ring|focus-visible:|shadow-)", re.I)
+
+# Directories never worth scanning (third-party code, build output, VCS).
+EXCLUDED_DIRS = {
+    ".git",
+    "node_modules",
+    "dist",
+    "build",
+    "out",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    "vendor",
+    "coverage",
+    "__pycache__",
+    ".venv",
+    "venv",
+}
 
 # --- Whole-text rules: patterns whose tokens routinely wrap across lines. ---
 # box-shadow values and :focus{} blocks are commonly multi-line in hand-written CSS.
+# Start at box-shadow OR a CSS-variable shadow token (--shadow-1, --card-shadow,
+# …) — the skill itself recommends defining shadows as tokens, so the property
+# form alone would miss its own primary pattern. Black detection covers comma
+# and space (modern) rgb()/rgba() syntax plus #000.
 BLACK_SHADOW = re.compile(
-    r"box-shadow\s*:[^;{}]*(?:rgba?\(\s*0\s*,\s*0\s*,\s*0|#000(?:000)?\b)", re.I
+    r"(?:box-shadow|--[\w-]*shadow[\w-]*)\s*:[^;{}]*"
+    r"(?:rgba?\(\s*0[\s,]+0[\s,]+0\b|#000(?:000)?\b)",
+    re.I,
 )
-FOCUS_BLOCK = re.compile(r":focus\b(?!-visible)[^{}]*\{[^{}]*\}", re.I | re.S)
+FOCUS_BLOCK = re.compile(r":focus\b(?!-visible|-within)[^{}]*\{[^{}]*\}", re.I | re.S)
 OUTLINE_NONE = re.compile(r"outline\s*:\s*(?:none|0)\b", re.I)
 
 # Comments are stripped before matching so a tell mentioned in a comment
@@ -126,7 +182,7 @@ def snippet_at(text: str, pos: int) -> str:
     return text[start:end].strip()[:120]
 
 
-def iter_files(paths):
+def iter_files(paths: list[str]) -> Iterator[str]:
     for p in paths:
         if os.path.isfile(p):
             # Only scan CSS/HTML-family files, even when passed directly, so
@@ -137,7 +193,8 @@ def iter_files(paths):
             else:
                 print(f"skipped: {p} (not a scannable type)", file=sys.stderr)
         elif os.path.isdir(p):
-            for root, _dirs, files in os.walk(p):
+            for root, dirs, files in os.walk(p):
+                dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
                 for f in files:
                     if f.lower().endswith(EXTS):
                         yield os.path.join(root, f)
@@ -145,9 +202,9 @@ def iter_files(paths):
             print(f"skipped: {p} (not found)", file=sys.stderr)
 
 
-def scan(paths):
-    hits = []  # hard tells
-    reviews = []  # heuristic, needs eyeballing
+def scan(paths: list[str]) -> tuple[list[str], list[tuple], list[tuple]]:
+    hits: list[tuple] = []  # hard tells
+    reviews: list[tuple] = []  # heuristic, needs eyeballing
     files = list(iter_files(paths))
     for fp in files:
         try:
@@ -163,6 +220,16 @@ def scan(paths):
             for rid, rx, msg in LINE_RULES:
                 if rx.search(line):
                     hits.append((fp, i, rid, msg, snippet))
+            if TW_OUTLINE_NONE.search(line) and not TW_RING_OK.search(line):
+                hits.append(
+                    (
+                        fp,
+                        i,
+                        "tw-outline-none",
+                        "Tailwind outline-none without a focus-visible ring — pair with focus-visible:ring-*",
+                        snippet,
+                    )
+                )
             m = SMALL_FONT.search(line)
             if m and int(m.group(1)) < 16 and "input" in line.lower():
                 reviews.append(
@@ -206,7 +273,7 @@ def scan(paths):
     return files, hits, reviews
 
 
-def main():
+def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if not args:
         print("usage: python scan-tells.py <file-or-dir> [more paths...]")
