@@ -135,8 +135,9 @@ LINE_RULES = [
         "arbitrary-black-tw",
         # Arbitrary-value escape hatch: bg-[#000] / text-[#000000]. The keyword
         # rule above only sees bg-black/text-black; indigo's hex literal is caught
-        # by indigo-accent, so black is the asymmetric gap closed here.
-        re.compile(r"\b(?:bg|text)-\[#000(?:000)?\]", re.I),
+        # by indigo-accent, so black is the asymmetric gap closed here. Alpha
+        # overlays (bg-[#000]/50) are exempt, matching the bg-black/50 exemption.
+        re.compile(r"\b(?:bg|text)-\[#000(?:000)?\](?!/)", re.I),
         "Tailwind arbitrary pure-black (bg-[#000]/text-[#000]) — use near-black",
     ),
 ]

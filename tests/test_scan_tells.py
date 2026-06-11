@@ -174,6 +174,14 @@ CLEAN = [
         '<div class="bg-[#0a0a0a]">x</div>',
         "arbitrary-black-tw",
     ),
+    # Alpha overlay in arbitrary form — same legitimate backdrop pattern the
+    # keyword rule exempts as bg-black/50; the two rules must agree.
+    (
+        "tw-arbitrary-black-alpha",
+        "a.html",
+        '<div class="bg-[#000]/50">x</div>',
+        "arbitrary-black-tw",
+    ),
 ]
 
 
