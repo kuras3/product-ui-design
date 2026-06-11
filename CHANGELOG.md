@@ -3,16 +3,16 @@
 Notable changes to this skill. Format follows [Keep a Changelog](https://keepachangelog.com/);
 released versions correspond to the GitHub releases / tags.
 
-## [Unreleased]
+## [0.2.0] - 2026-06-11
 
 ### Added
 - `scan-tells.py` detects the **Tailwind-utility** forms of the tells, not just the CSS-property forms: `transition-all`, `scale-0` / `scale-x-0` / `scale-y-0`, `bg-black` / `text-black`, and `outline-none` without a focus-visible ring.
 - Shadow check covers **CSS-variable shadow tokens** (`--shadow-1: …`) — the shape the skill itself recommends — and **modern space-separated** color syntax (`rgb(0 0 0 / .5)`), in addition to `box-shadow:` with comma syntax.
 - Pure-black text/bg check covers `rgb()` / `rgba()` in both comma and space syntax.
 - **Pure-black color tokens** (`--foreground:#000`, `--background:black`) are flagged: the no-raw-hex rule pushes generated pure-black into token definitions the property-scoped check never saw. A pure-black `--border` token stays out of scope (a different, weaker tell).
-- **Arbitrary-value Tailwind black** (`bg-[#000]`, `text-[#000000]`) — the escape hatch the keyword `bg-black`/`text-black` rule missed.
+- **Arbitrary-value Tailwind black** (`bg-[#000]`, `text-[#000000]`) — the escape hatch the keyword `bg-black`/`text-black` rule missed. Alpha overlays (`bg-[#000]/50`) are exempt, matching the `bg-black/50` exemption.
 - Indigo Tailwind check now covers the `outline-`, `divide-`, `decoration-`, `accent-`, `caret-`, and `shadow-` utility prefixes, not just `bg`/`text`/`border`/`ring`/etc.
-- Test suite (`tests/test_scan_tells.py`, 40 cases pairing each rule's hit and miss) and CI (`.github/workflows/test.yml`, Python 3.9 + 3.12).
+- Test suite (`tests/test_scan_tells.py`, 41 cases pairing each rule's hit and miss) and CI (`.github/workflows/test.yml`, Python 3.9 + 3.12).
 
 ### Fixed
 - `:focus-within { outline: none }` is no longer false-flagged as a missing focus ring.
